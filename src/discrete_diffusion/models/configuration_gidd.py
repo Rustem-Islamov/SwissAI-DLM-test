@@ -37,6 +37,13 @@ class GiddConfig(PretrainedConfig):
         min_log_snr: float = -9.0,
         max_log_snr: float = 9.0,
         activation_scale: float = 1.0,
+        mlp_activation: str = "relu2",
+        norm_zero_centered: bool = True,
+        qk_norm_per_head: bool = False,
+        qk_norm_affine: bool = True,
+        peri_ln: bool = False,
+        peri_ln_affine: bool = True,
+        peri_ln_embed: bool = False,
         activation_checkpointing: bool = False,
         activation_checkpoint_preserve_rng_state: bool = False,
         **kwargs,
@@ -76,5 +83,12 @@ class GiddConfig(PretrainedConfig):
         self.min_log_snr = min_log_snr
         self.max_log_snr = max_log_snr
         self.activation_scale = activation_scale
+        self.mlp_activation = mlp_activation
+        self.norm_zero_centered = norm_zero_centered
+        self.qk_norm_per_head = qk_norm_per_head
+        self.qk_norm_affine = qk_norm_affine
+        self.peri_ln = peri_ln
+        self.peri_ln_affine = peri_ln_affine
+        self.peri_ln_embed = peri_ln_embed
         self.activation_checkpointing = activation_checkpointing
         self.activation_checkpoint_preserve_rng_state = activation_checkpoint_preserve_rng_state

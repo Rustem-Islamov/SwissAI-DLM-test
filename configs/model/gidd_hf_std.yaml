@@ -1,0 +1,29 @@
+# GIDD-HF with a muP / CompleteP parametrization (use with optim=adamw_mup).
+#
+# The architecture is the unmodified GIDD model.  The legacy scale knobs of gidd_hf.yaml
+# (init_scale, weight_scaling, head_scale, activation_scale) are neutral in this mode: the
+# init is derived from the parametrization (hidden std = init_std_mult / sqrt(fan_in),
+# embedding std = aux_init_scale, zero head), and the residual multiplier is a 1/L form (see resid_mult).
+defaults:
+  - gidd_hf
+  - _self_
+
+name: gidd_hf_std
+
+# standard | mup | completep  (completep: muP in width + the 1/L residual rule below + in-block eps * base_depth / n_blocks)
+parametrization: completep
+base_width: 256     # bst-scaling convention (BASE_WIDTH): lr is the width-256 LR; hidden/head LR = lr * 256 / hidden_size
+base_depth: 12      # n_blocks at which the CompleteP eps factor is 1
+# Residual branch multiplier: standard / mup use resid_scale / n_blocks (= 1 / n_blocks below);
+# completep uses resid_mult * base_depth / n_blocks (== resid_mult at the base depth).
+resid_mult: 1.0
+# gidd_hf.yaml uses resid_scale 4.0 (residual multiplier 4 / n_blocks); the dense LM has no such
+# constant, so standard / mup use plain 1 / n_blocks here.  (completep ignores resid_scale.)
+resid_scale: 1.0
+init_std_mult: 1.0  # hidden init std = init_std_mult / sqrt(fan_in)
+# Required by mup / completep: untied embeddings, zero head init, no extra logit scale.
+tie_word_embeddings: false
+zero_head_init: true
+head_output_scaling_enabled: false
+activation_scale: 1.0
+torch_dtype: fp32   # fp32 master weights so the decoupled decay is not rounded away

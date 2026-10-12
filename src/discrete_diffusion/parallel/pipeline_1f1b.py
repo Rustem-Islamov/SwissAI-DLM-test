@@ -28,6 +28,7 @@ from ..algorithms.gidd import (
 )
 from ..data import get_dataloaders, get_tokenizer
 from ..models.gidd_hf_wrapper import build_gidd_config
+from ..models.parametrized_init import init_parametrized, set_residual_scale
 from ..models.modeling_gidd_hf import (
   GiddLayer,
   GiddRMSNorm,
@@ -40,7 +41,7 @@ from ..noise_schedules.gidd_easydel import (
   EasyDelHybridDiffusion,
   sample_t as sample_t_easydel,
 )
-from ..optimizers import Scion, ScionTrace
+from ..optimizers import Scion, ScionTrace, build_adamw_mup
 from .. import utils
 
 logger = utils.get_logger(__name__)
@@ -90,8 +91,14 @@ class GiddPipelineStage(nn.Module):
         mean=0.0,
         std=self.hf_config.emb_init_scale,
       )
+      self.embed_layernorm = (
+        GiddRMSNorm(
+          config=self.hf_config, dtype=torch.float32,
+          affine=bool(self.hf_config.peri_ln_affine))
+        if self.hf_config.peri_ln_embed else None)
     else:
       self.embed_tokens = None
+      self.embed_layernorm = None
 
     self.layers = nn.ModuleList([
       GiddLayer(
@@ -130,6 +137,10 @@ class GiddPipelineStage(nn.Module):
     self.activation_checkpoint_preserve_rng_state = bool(
       self.hf_config.activation_checkpoint_preserve_rng_state)
 
+    if getattr(config.model, 'parametrization', None) is not None:
+      init_parametrized(self, config.model)
+      set_residual_scale(self, config.model)
+
   def _checkpoint_layer(
       self,
       block: GiddLayer,
@@ -156,6 +167,8 @@ class GiddPipelineStage(nn.Module):
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     if self.is_first:
       hidden_states = self.embed_tokens(x.to(torch.long))
+      if self.embed_layernorm is not None:
+        hidden_states = self.embed_layernorm(hidden_states)
     else:
       hidden_states = x
 
@@ -373,6 +386,11 @@ def _build_optimizer(config, parameters: Iterable[torch.nn.Parameter], stage: nn
       eps=config.optim.eps,
       weight_decay=config.optim.weight_decay,
     )
+    scheduler = hydra.utils.instantiate(config.lr_scheduler, optimizer=optimizer)
+    return optimizer, scheduler
+
+  if optimizer_name == 'adamw_mup':
+    optimizer = build_adamw_mup(config, stage.named_parameters())
     scheduler = hydra.utils.instantiate(config.lr_scheduler, optimizer=optimizer)
     return optimizer, scheduler
 

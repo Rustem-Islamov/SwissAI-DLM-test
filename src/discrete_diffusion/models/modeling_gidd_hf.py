@@ -228,25 +228,46 @@ class RotaryEmbedding(nn.Module):
 
 
 class GiddRMSNorm(nn.Module):
+    """RMSNorm.
+
+    Defaults are the original GIDD norm: gain ``1 + weight`` with ``weight`` initialised to 0 and
+    ``eps = config.rms_norm_eps``.  Options (used by the reference-style architecture):
+
+    * ``config.norm_zero_centered=False``: plain gain ``weight`` initialised to 1.
+    * ``eps=None`` (``config.rms_norm_eps=None``): ``torch.finfo(input dtype).eps``, as
+      ``torch.nn.RMSNorm(eps=None)``.
+    * ``dim`` / ``affine``: norm over another size (per-head QK-norm) and/or without a gain.
+    """
+
     def __init__(
         self,
         config: GiddConfig,
         dtype=torch.float32,
+        dim: int | None = None,
+        affine: bool = True,
+        eps: float | None | str = "config",
     ):
         super().__init__()
         self.config = config
-        self.epsilon = self.config.rms_norm_eps
-        self.weight = nn.Parameter(torch.zeros(self.config.hidden_size, dtype=dtype))
-        # self.bias = nn.Parameter(torch.zeros(self.config.hidden_size, dtype=dtype))
+        self.epsilon = self.config.rms_norm_eps if eps == "config" else eps
+        self.zero_centered = bool(getattr(config, "norm_zero_centered", True))
+        if affine:
+            init = torch.zeros if self.zero_centered else torch.ones
+            self.weight = nn.Parameter(init(dim or self.config.hidden_size, dtype=dtype))
+        else:
+            self.weight = None
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         dtype = hidden_states.dtype
+        eps = torch.finfo(dtype).eps if self.epsilon is None else self.epsilon
         variance = hidden_states.to(torch.float32)
         variance = variance.pow(2.0)
         variance = variance.mean(-1, keepdim=True)
-        hidden_states = hidden_states * torch.rsqrt(variance + self.epsilon)
+        hidden_states = hidden_states * torch.rsqrt(variance + eps)
 
-        hidden_states = ((1 + self.weight) * hidden_states)
+        if self.weight is not None:
+            gain = (1 + self.weight) if self.zero_centered else self.weight
+            hidden_states = gain * hidden_states
         return hidden_states.to(dtype)
 
 ALL_LAYERNORM_LAYERS.append(GiddRMSNorm)
@@ -274,7 +295,10 @@ class GiddMLP(nn.Module):
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
         h = self.up_proj(h)
-        h = self.config.activation_scale * (torch.relu(h) ** 2)
+        if self.config.mlp_activation == "gelu":
+            h = self.config.activation_scale * torch.nn.functional.gelu(h)
+        else:
+            h = self.config.activation_scale * (torch.relu(h) ** 2)
         h = self.down_proj(h)
         return h
 
@@ -315,7 +339,8 @@ class FlexSoftcapAttention(nn.Module):
 
         def score_mod(score, b, h, q_idx, kv_idx):
             soft_cap = self.soft_cap
-            score = soft_cap * torch.tanh(score / soft_cap)
+            if soft_cap > 0:
+                score = soft_cap * torch.tanh(score / soft_cap)
             keep = attention_mask[b, q_idx, kv_idx]
             return torch.where(keep, score, torch.finfo(score.dtype).min)
 
@@ -352,7 +377,8 @@ class VanillaSoftcapAttention(nn.Module):
             q * self.scale,
             k,
         )
-        scores = self.soft_cap * torch.tanh(scores / self.soft_cap)
+        if self.soft_cap > 0:
+            scores = self.soft_cap * torch.tanh(scores / self.soft_cap)
         if attention_mask is not None:
             scores = scores.masked_fill(~attention_mask.unsqueeze(1), torch.finfo(scores.dtype).min)
         probs = torch.softmax(scores.to(torch.float32), dim=-1).to(scores.dtype)
@@ -436,6 +462,7 @@ class GiddAttention(nn.Module):
     ):
         super().__init__()
 
+        self.config = config
         self.hidden_size = config.hidden_size
         head_dim = config.hidden_size // config.num_attention_heads
         self.head_dim = getattr(config, "head_dim", head_dim)
@@ -445,8 +472,16 @@ class GiddAttention(nn.Module):
 
         self.use_qk_norm = config.use_qk_norm
         if self.use_qk_norm:
-            self.q_norm = GiddRMSNorm(config, dtype=torch.float32)
-            self.k_norm = GiddRMSNorm(config, dtype=torch.float32)
+            if getattr(config, "qk_norm_per_head", False):
+                # Reference: RMSNorm over head_dim, no gain, eps = finfo(dtype).eps.
+                qk_kwargs = dict(
+                    dim=self.head_dim,
+                    affine=bool(config.qk_norm_affine),
+                    eps=None if config.rms_norm_eps is None else "config")
+            else:
+                qk_kwargs = {}
+            self.q_norm = GiddRMSNorm(config, dtype=torch.float32, **qk_kwargs)
+            self.k_norm = GiddRMSNorm(config, dtype=torch.float32, **qk_kwargs)
         else:
             self.q_norm = None
             self.k_norm = None
@@ -592,7 +627,8 @@ class GiddAttention(nn.Module):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
-        if self.use_qk_norm:
+        per_head_qk_norm = bool(getattr(self.config, "qk_norm_per_head", False))
+        if self.use_qk_norm and not per_head_qk_norm:
             query_states = self.q_norm(query_states)
             key_states = self.k_norm(key_states)
 
@@ -611,6 +647,10 @@ class GiddAttention(nn.Module):
         query_states = query_states.view(qshape)
         key_states = key_states.view(kv_shape)
         value_states = value_states.view(kv_shape)
+
+        if self.use_qk_norm and per_head_qk_norm:
+            query_states = self.q_norm(query_states)
+            key_states = self.k_norm(key_states)
 
         query_states, key_states, cos, sin = self.rotary(
             positions=position_ids,
@@ -680,6 +720,15 @@ class GiddLayer(nn.Module):
             config=config,
             dtype=torch.float32,
         )
+        # Peri-LN / sandwich norm: x = x + r * Norm(Module(Norm(x))), i.e. an extra RMSNorm on the
+        # output of each residual branch (arXiv:2502.02732 Eq. 3).  nn.Identity => original GIDD.
+        if getattr(config, "peri_ln", False):
+            peri_affine = bool(config.peri_ln_affine)
+            self.peri_attn_layernorm = GiddRMSNorm(config, dtype=torch.float32, affine=peri_affine)
+            self.peri_mlp_layernorm = GiddRMSNorm(config, dtype=torch.float32, affine=peri_affine)
+        else:
+            self.peri_attn_layernorm = nn.Identity()
+            self.peri_mlp_layernorm = nn.Identity()
 
     def forward(
         self,
@@ -699,10 +748,12 @@ class GiddLayer(nn.Module):
             frequencies=frequencies,
             output_attentions=output_attentions,
         )
-        hidden_states = hidden_states + self.resid_scale * attn_outputs.hidden_states
+        attn_branch = self.peri_attn_layernorm(attn_outputs.hidden_states)
+        hidden_states = hidden_states + self.resid_scale * attn_branch
 
         mlp_inputs = self.mlp_layernorm(hidden_states)
         mlp_output = self.mlp(mlp_inputs)
+        mlp_output = self.peri_mlp_layernorm(mlp_output)
         hidden_states = hidden_states + self.resid_scale * mlp_output
 
         return DecoderLayerOutput(
@@ -749,6 +800,10 @@ class GiddModel(GiddPreTrainedModel):
         )
         self.embed_tokens.weight.data = self.embed_tokens.weight.data.to(dtype)
         nn.init.normal_(self.embed_tokens.weight, mean=0.0, std=self.config.emb_init_scale)
+        # Peri-LN part 1: y_0 = Norm(x_0) after the embedding (optional).
+        self.embed_layernorm = (
+            GiddRMSNorm(config, dtype=torch.float32, affine=bool(config.peri_ln_affine))
+            if getattr(config, "peri_ln_embed", False) else None)
 
         freqs = compute_basic_frequencies(
             base=config.rope_theta,
@@ -819,6 +874,8 @@ class GiddModel(GiddPreTrainedModel):
             )
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids.to(torch.long))
+            if self.embed_layernorm is not None:
+                inputs_embeds = self.embed_layernorm(inputs_embeds)
 
         if use_cache and past_key_values is None:
             past_key_values = [None] * self.config.num_hidden_layers

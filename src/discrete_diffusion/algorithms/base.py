@@ -14,7 +14,7 @@ import transformers
 
 from ..evaluations import Metrics
 from ..models import create_ema
-from ..optimizers import Scion, ScionTrace
+from ..optimizers import Scion, ScionTrace, build_adamw_mup
 from .. import utils
 from ..utils.utils import get_logger
 
@@ -1224,7 +1224,15 @@ class TrainerBase(L.LightningModule):
 
   def configure_optimizers(self):
     optimizer_name = str(getattr(self.config.optim, 'name', 'adamw')).lower()
-    if optimizer_name == 'adamw':
+    if optimizer_name == 'adamw_mup':
+      # Decoupled-weight-decay AdamW with muP / CompleteP per-role LR and eps scaling.
+      optimizer = build_adamw_mup(self.config, self._named_trainable_parameters())
+      scheduler = hydra.utils.instantiate(self.config.lr_scheduler, optimizer=optimizer)
+      scheduler_dict = {'scheduler': scheduler,
+                        'interval': 'step',
+                        'monitor': 'val/loss',
+                        'name': 'trainer/lr'}
+    elif optimizer_name == 'adamw':
       use_jax_groups = bool(getattr(self.config.optim, "use_jax_param_groups", False))
       adamw_params = (
         self._build_adamw_jax_style_param_groups()
@@ -1305,7 +1313,7 @@ class TrainerBase(L.LightningModule):
     else:
       raise ValueError(
         f"Unsupported optimizer '{optimizer_name}'. "
-        "Expected one of: adamw, scion.")
+        "Expected one of: adamw, adamw_mup, scion.")
 
     
     return [optimizer], [scheduler_dict]

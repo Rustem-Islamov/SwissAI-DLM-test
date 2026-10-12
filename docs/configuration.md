@@ -135,7 +135,34 @@ embeddings. `gidd_hf_8b` is approximately 7.9B parameters with the configured
 | --- | --- |
 | `adamw` | Standard AdamW. |
 | `adamw_grouped` | AdamW with model-aware parameter groups. |
+| `adamw_mup` | AdamW with fully decoupled weight decay and muP / CompleteP LR and epsilon scaling (GIDD-HF). |
 | `scion` | SCION/Frank-Wolfe optimizer with geometry-specific boundaries. |
+
+For `adamw_mup` (pair it with `model=gidd_hf_std`), `model.parametrization` selects
+`standard`, `mup` or `completep`, with `model.base_width` / `model.base_depth` as the reference
+model the LR was tuned on. In this mode the GIDD architecture is unchanged but its legacy scale
+knobs (`init_scale`, `weight_scaling`, `head_scale`, `activation_scale`) are neutral and the
+init comes from the parametrization: hidden matrices `init_std_mult / sqrt(fan_in)`, embeddings
+`aux_init_scale`, zero head. `lr` is the peak LR of the width-`base_width` model; hidden and
+output groups use `lr * base_width / hidden_size`, embeddings, norm gains and biases use `lr`,
+and Adam's epsilon is scaled the same way (CompleteP additionally multiplies the in-block
+epsilon by `base_depth / n_blocks`). The residual branch multiplier is a 1/L form:
+`resid_scale / n_blocks` for `standard`/`mup` (`resid_scale` is 1.0 in `gidd_hf_std`, 4.0 in the original `gidd_hf`) and
+`resid_mult * base_depth / n_blocks` for `completep`. `weight_decay` is a per-step shrink fraction applied as
+`sched(t) * weight_decay` to every weight, independent of `lr`, width and the muP scale (equal
+to `peak_lr * conventional_wd`). Scaling width requires `intermediate_size` and `n_heads` to grow
+with `hidden_size`; untied embeddings and `zero_head_init=true` are enforced. `gidd_hf_std`
+defaults to fp32 master weights so the shrink is not rounded away (add
+`training.forward_autocast_dtype=bf16` for bf16 compute). Leaving `model.parametrization` unset
+keeps the historical init and works with the other optimizers.
+
+`model=gidd_hf_ref` (extends `gidd_hf_std`) additionally matches the bst-scaling dense LM
+architecture with Peri-LN ("sandwich") norm placement: `x = x + r * Norm(Module(Norm(x)))` in
+both sub-layers, final norm before `lm_head`, optional `peri_ln_embed`; no attention soft-cap, no
+biases, GELU MLP with `intermediate_size = 4 * hidden_size`, per-head gain-free QK-norm, RMSNorm
+gains initialised to 1 and `eps = finfo(dtype).eps`. All of these are off-by-default options of
+the GIDD model (`peri_ln`, `attn_soft_cap=0`, `mlp_activation`, `qk_norm_per_head`,
+`norm_zero_centered`, `rms_norm_eps=null`).
 
 For SCION, `lr` is the Frank-Wolfe step size; `momentum` is the new-gradient
 weight. `equal_group_lr` applies that step size to every group, while

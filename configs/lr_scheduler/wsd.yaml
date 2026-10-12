@@ -1,0 +1,5 @@
+# Warmup-stable-decay as in bst-scaling: linear warmup, constant, linear decay to 0.
+_target_: src.discrete_diffusion.utils.WSDLRScheduler
+total_steps: ${trainer.max_steps}
+warmup_frac: 0.1
+decay_frac: 0.2

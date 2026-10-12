@@ -108,6 +108,36 @@ class CosineDecayWarmupLRScheduler(
       super().step_update(num_updates=self._last_epoch)
 
 
+def wsd_lr_multiplier(it, total_steps, warmup_frac=0.1, decay_frac=0.2):
+  """Warmup-stable-decay multiplier in [0, 1], as in bst-scaling ``train.get_lr``.
+
+  Linear warmup ``(it + 1) / (warmup + 1)``, constant 1, then linear decay to 0 over the last
+  ``decay_frac`` of ``total_steps``.
+  """
+  warmup = int(round(warmup_frac * total_steps))
+  cooldown = int(round(decay_frac * total_steps))
+  stable_end = total_steps - cooldown
+  if it < warmup:
+    return (it + 1) / (warmup + 1)
+  if it >= total_steps:
+    return 0.0
+  if it < stable_end:
+    return 1.0
+  return max(0.0, 1.0 - (it - stable_end) / max(1, cooldown))
+
+
+class WSDLRScheduler(torch.optim.lr_scheduler.LambdaLR):
+  """Per-step WSD schedule; scales each param group's own LR (so muP group scales survive)."""
+
+  def __init__(self, optimizer, total_steps, warmup_frac=0.1, decay_frac=0.2):
+    total_steps = int(total_steps)
+    if total_steps <= 0:
+      raise ValueError(f'WSD scheduler needs a positive step budget, got {total_steps}')
+    super().__init__(
+      optimizer,
+      lambda it: wsd_lr_multiplier(it, total_steps, warmup_frac, decay_frac))
+
+
 # Copied from https://github.com/jdeschena/sdtt/blob/bbc54d5b3c5fcffd79602cff17ed34dde1f3eff6/src/sdtt/core/sampling/utils.py#L10
 def top_k_top_p_filtering(
     logits,

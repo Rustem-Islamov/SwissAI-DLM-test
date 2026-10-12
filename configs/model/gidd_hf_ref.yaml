@@ -1,0 +1,39 @@
+# @package _global_
+# GIDD-HF made as close as possible to the bst-scaling dense LM (moe_scaling/model.py) with
+# Peri-LN ("sandwich") norm placement, muP / CompleteP parametrization (use with optim=adamw_mup).
+#
+# Per layer (same placement as the dense model with peri_ln=True):
+#   x = x + r * peri_attn_norm( attn( attn_norm(x) ) )
+#   x = x + r * peri_mlp_norm ( mlp ( mlp_norm (x) ) )
+# plus the final norm before lm_head (always) and, optionally, a norm after the embedding.
+# Remaining differences to the dense LM: bidirectional attention, diffusion loss, vocabulary.
+# This file is packaged globally only so it can also set training.ema (below); the model keys
+# live under `model:` exactly as in the sibling configs.
+defaults:
+  - gidd_hf_std@model
+  - _self_
+
+# The dense LM in bst-scaling trains and evaluates the raw weights (no EMA).  Override with
+# training.ema=<decay> to re-enable it.
+training:
+  ema: 0
+
+model:
+  name: gidd_hf_ref
+
+  # --- Peri-LN
+  peri_ln: true
+  peri_ln_affine: true     # learnable gains, like the dense model's rms_norm_elementwise_affine
+  peri_ln_embed: false     # dense default (the paper's optional part 1)
+
+  # --- dense-LM architecture
+  attn_soft_cap: 0.0       # no attention logit soft-cap (plain 1/sqrt(d) softmax)
+  attn_bias: false         # no K/V biases
+  mlp_bias: false          # no biases anywhere
+  mlp_activation: gelu     # dense MLP: c_fc -> GELU -> c_proj (hidden = 4 * n_embd)
+  use_qk_norm: true
+  qk_norm_per_head: true   # RMSNorm over head_dim ...
+  qk_norm_affine: false    # ... without a gain
+  norm_zero_centered: false  # RMSNorm gain `weight` initialised to 1 (not `1 + weight`)
+  rms_norm_eps: null       # eps = finfo(input dtype).eps, like torch RMSNorm(eps=None)
+  intermediate_size: ${mul:4, ${.hidden_size}}

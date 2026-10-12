@@ -1,0 +1,13 @@
+name: adamw_mup
+# Peak learning rate of the width-`base_width` model; every group's LR is lr * lr_scale(role).
+lr: 2.19116e-2   # bst-scaling peri-LN anchor (w768 L12, B 128 x 1024 tokens); width-256 convention, see model.base_width
+# Fully decoupled weight decay: each step shrinks every weight by sched(t) * weight_decay,
+# independent of lr, width and the muP scale.  A per-step fraction (= peak_lr * conventional
+# wd, e.g. 3e-4 * 0.1 = 3e-5).  Use fp32 master weights (model.torch_dtype=fp32).
+weight_decay: 1e-4    # decoupled; bst-scaling anchor c0 = 1e-4
+# The parametrization (standard | mup | completep), base_width and base_depth are set on the
+# model (model=gidd_hf_std) so the init and these LR / eps scales cannot disagree.
+beta1: 0.9
+beta2: 0.95
+eps: 1e-14       # group eps = eps * eps_scale(role), see model.parametrization
+fused: null        # null = torch default
