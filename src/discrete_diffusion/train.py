@@ -113,13 +113,26 @@ def train(config):
   model._scion_trace_dataloader = getattr(
     train_ds, '_scion_trace_dataloader', None)
 
-  # Torch compile if enabled. Keep Lightning logging out of Dynamo
-  if omegaconf.OmegaConf.select(config, 'training.torch_compile', default=False):
-    logger.info('Disabling Lightning logging methods inside torch.compile.')
-    model.log = _disable_torch_compile(model.log)
-    model.log_dict = _disable_torch_compile(model.log_dict)
-    logger.info('Compiling LightningModule with torch.compile.')
-    model = torch.compile(model)
+  # Torch compile: auto compiles algorithms with compile_for_training.
+  compile_mode = str(omegaconf.OmegaConf.select(
+    config, 'training.torch_compile', default='auto')).strip().lower()
+  if compile_mode not in {'auto', 'true', 'false'}:
+    raise ValueError(
+      "training.torch_compile must be auto, true or false, got "
+      f"{compile_mode!r}.")
+  compile_model = compile_mode == 'true' or (
+    compile_mode == 'auto' and hasattr(model, 'compile_for_training'))
+  if compile_model:
+    if hasattr(model, 'compile_for_training'):
+      logger.info('Compiling model layers and loss in place with torch.compile.')
+      model.compile_for_training()
+    else:
+      # Keep Lightning logging out of Dynamo
+      logger.info('Disabling Lightning logging methods inside torch.compile.')
+      model.log = _disable_torch_compile(model.log)
+      model.log_dict = _disable_torch_compile(model.log_dict)
+      logger.info('Compiling LightningModule with torch.compile.')
+      model = torch.compile(model)
 
   if config.training.get('fault_tolerant', False):
     os.environ.setdefault('PL_FAULT_TOLERANT_TRAINING', '1')

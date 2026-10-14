@@ -20,6 +20,8 @@ HIDDEN_SIZE="${HIDDEN_SIZE:-768}"
 INTERMEDIATE_SIZE="${INTERMEDIATE_SIZE:-$((4 * HIDDEN_SIZE))}"
 N_HEADS="${N_HEADS:-$((HIDDEN_SIZE / 64))}"
 ACTIVATION_CHECKPOINTING="${ACTIVATION_CHECKPOINTING:-false}"
+# torch.compile: auto compiles each GIDD layer and the loss; set false to disable.
+TORCH_COMPILE="${TORCH_COMPILE:-auto}"
 # Parameter storage dtype (configs/model/gidd_hf.yaml default bf16).  fp32 keeps
 # fp32 master weights while trainer.precision=bf16-mixed still computes in bf16.
 MODEL_DTYPE="${MODEL_DTYPE:-bf16}"
@@ -48,6 +50,7 @@ NUM_WORKERS="${NUM_WORKERS:-1}"
 LAZY_SPAWN_DATASET="${LAZY_SPAWN_DATASET:-true}"
 NUM_SANITY_VAL_STEPS="${NUM_SANITY_VAL_STEPS:-0}"
 TRAIN_LOG_EVERY_N_STEPS="${TRAIN_LOG_EVERY_N_STEPS:-25}"
+# Validation interval in optimizer steps (passed to Lightning as micro-batches).
 VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-250}"
 LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-0.5}"
 VALIDATE_AFTER_TRAINING="${VALIDATE_AFTER_TRAINING:-true}"
@@ -130,6 +133,7 @@ if (( TOKEN_BUDGET <= 0 || SEQUENCE_LENGTH <= 0 || LOCAL_BATCH <= 0 || ACCUMULAT
   echo "TOKEN_BUDGET, SEQUENCE_LENGTH, LOCAL_BATCH, and ACCUMULATION_STEPS must be positive." >&2
   exit 1
 fi
+VAL_CHECK_BATCHES=$((VAL_CHECK_INTERVAL * ACCUMULATION_STEPS))
 if (( TRAIN_LOG_EVERY_N_STEPS <= 0 || VAL_CHECK_INTERVAL <= 0 || LATE_VALIDATION_EVERY_N_STEPS <= 0 )); then
   echo "Training and validation logging intervals must be positive." >&2
   exit 1
@@ -329,7 +333,7 @@ srun --environment=uni-d2 \\
   trainer.log_every_n_steps=${TRAIN_LOG_EVERY_N_STEPS} \\
   trainer.gradient_clip_val=0.0 \\
   trainer.num_sanity_val_steps=${NUM_SANITY_VAL_STEPS} \\
-  trainer.val_check_interval=${VAL_CHECK_INTERVAL} \\
+  trainer.val_check_interval=${VAL_CHECK_BATCHES} \\
   trainer.limit_val_batches=${LIMIT_VAL_BATCHES} \\
   trainer.precision=bf16-mixed \\
   loader.global_batch_size=${GBS} \\
@@ -344,7 +348,7 @@ srun --environment=uni-d2 \\
   training.antithetic_sampling=true \\
   training.loss_precision=bf16 \\
   training.fault_tolerant=true \\
-  training.torch_compile=false \\
+  training.torch_compile=${TORCH_COMPILE} \\
   training.log_train_aux_metrics=true \\
   training.sync_train_loss=true \\
   training.validate_after_training=${VALIDATE_AFTER_TRAINING} \\
@@ -360,6 +364,7 @@ srun --environment=uni-d2 \\
   callbacks.checkpoint_every_n_steps.every_n_train_steps=${CHECKPOINT_EVERY} \\
   callbacks.checkpoint_every_n_steps.save_top_k=${CHECKPOINT_SAVE_TOP_K} \\
   callbacks.checkpoint_every_n_steps.save_last=${CHECKPOINT_SAVE_LAST} \\
+  +callbacks.checkpoint_every_n_steps.save_on_train_epoch_end=true \\
   callbacks.checkpoint_monitor.save_top_k=${CHECKPOINT_MONITOR_SAVE_TOP_K} \\
   checkpointing.save_dir="${RUN_STORAGE_DIR}" \\
   checkpointing.resume_from_ckpt=${JOB_RESUME_FROM_CKPT} \\

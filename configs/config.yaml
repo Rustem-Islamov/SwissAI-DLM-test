@@ -43,7 +43,7 @@ training:
   change_of_variables: False
   loss_precision: 'bf16'  # bf16, float32, float64
   finetune_path: ''
-  torch_compile: false
+  torch_compile: auto  # auto (compile GIDD layers + loss) | true | false
   log_train_aux_metrics: true
   sync_train_loss: true
   resample: False

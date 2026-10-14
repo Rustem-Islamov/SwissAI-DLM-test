@@ -49,6 +49,8 @@ class DecoupledAdamW(torch.optim.AdamW):
                lambda_decay=0.0, fused=None, foreach=None):
     super().__init__(params, lr=lr, betas=betas, eps=eps, weight_decay=0.0,
                      fused=fused, foreach=foreach)
+    # fused=True sets this, which makes Lightning refuse gradient clipping.
+    self._step_supports_amp_scaling = False
     for group in self.param_groups:
       group.setdefault('lambda_decay', float(lambda_decay))
       group.setdefault('peak_lr', float(group['lr']))

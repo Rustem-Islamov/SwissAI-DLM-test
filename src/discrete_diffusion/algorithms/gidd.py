@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from omegaconf import OmegaConf
 from torch.utils.checkpoint import checkpoint
 
 from . import base as trainer_base
@@ -674,6 +675,17 @@ class GIDD(trainer_base.TrainerBase):
     # final slice; it is intentionally not checkpointed.
     self._global_time_lattice_shift = None
 
+  def compile_for_training(self):
+    """Compile each transformer layer and the loss in place (checkpoint keys unchanged)."""
+    layers = getattr(getattr(getattr(self.backbone, 'model', None), 'model', None),
+                     'layers', None)
+    if layers is not None:
+      for layer in layers:
+        layer.compile()
+    else:
+      self.backbone.compile()
+    self.loss_fn.compile()
+
   def _process_model_input(self, x0, valid_tokens):
     return x0, valid_tokens
 
@@ -718,9 +730,11 @@ class GIDD(trainer_base.TrainerBase):
       return self._sample_t_fn(
         self.config, batch_size, eps=eps, device=self.device)
 
-    low_disc = bool(getattr(
-      self.config.training, 'low_discrepancy_sampling',
-      getattr(self.config.algo, 'low_discrepancy_sampling', False)))
+    # OmegaConf.select avoids a getattr-default exception cycle that leaked logits.
+    low_disc = bool(OmegaConf.select(
+      self.config, 'training.low_discrepancy_sampling',
+      default=OmegaConf.select(
+        self.config, 'algo.low_discrepancy_sampling', default=False)))
     if not low_disc:
       raise ValueError(
         "algo.time_sampling_scope='global_batch' currently requires "
