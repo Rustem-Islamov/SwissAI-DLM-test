@@ -1,0 +1,11 @@
+
+=== base-rung no-op, rung (w,L)=(768, 12), seeds=[1, 2, 3, 4]
+  seed 1: step-0 loss on=1.961988739669323 off=1.961988739669323  BITWISE identical
+           worst rel diff: t=0..1: 8.59e-03  t=2..10: 5.69e-02  t>10: 2.02e-02
+  seed 2: step-0 loss on=1.9655094295740128 off=1.9655094295740128  BITWISE identical
+           worst rel diff: t=0..1: 1.90e-02  t=2..10: 1.79e-01  t>10: 7.39e-02
+  seed 3: step-0 loss on=1.9763925224542618 off=1.9763925224542618  BITWISE identical
+           worst rel diff: t=0..1: 5.35e-01  t=2..10: 6.80e-02  t>10: 6.94e-02
+  seed 4: step-0 loss on=1.9635100215673447 off=1.9635100215673447  BITWISE identical
+           worst rel diff: t=0..1: 5.19e-01  t=2..10: 3.57e-01  t>10: 6.51e-02
+  Step 0 must be bitwise identical.  Late drift with MIXED loss-difference signs across seeds is GPU nondeterminism, not the flag.

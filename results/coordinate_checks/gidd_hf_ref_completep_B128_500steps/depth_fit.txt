@@ -1,0 +1,30 @@
+
+=== depth check, arm=off  depth L=[8, 16, 32, 64]  norm=l2norm  window=steps 2..10
+    t=2   exponent=+0.651 +- 0.087  (n_seeds=4)
+    t=3   exponent=+0.718 +- 0.107  (n_seeds=4)
+    t=4   exponent=+0.866 +- 0.091  (n_seeds=4)
+    t=5   exponent=+0.903 +- 0.119  (n_seeds=4)
+    t=6   exponent=+0.975 +- 0.050  (n_seeds=4)
+    t=7   exponent=+0.942 +- 0.085  (n_seeds=4)
+    t=8   exponent=+0.953 +- 0.097  (n_seeds=4)
+    t=9   exponent=+0.961 +- 0.097  (n_seeds=4)
+    t=10  exponent=+0.959 +- 0.100  (n_seeds=4)
+  -> mean |exponent| = 0.881   worst = +0.975 (t=6)   mean se = 0.093
+     WARNING: seed band > 0.05; the doc reports +-0.01 for this quantity. Check the norm / window before reading anything into the exponent.
+
+=== depth check, arm=on  depth L=[8, 16, 32, 64]  norm=l2norm  window=steps 2..10
+    t=2   exponent=-0.342 +- 0.090  (n_seeds=4)
+    t=3   exponent=-0.257 +- 0.128  (n_seeds=4)
+    t=4   exponent=-0.223 +- 0.076  (n_seeds=4)
+    t=5   exponent=-0.157 +- 0.180  (n_seeds=4)
+    t=6   exponent=-0.145 +- 0.173  (n_seeds=4)
+    t=7   exponent=-0.137 +- 0.149  (n_seeds=4)
+    t=8   exponent=-0.140 +- 0.140  (n_seeds=4)
+    t=9   exponent=-0.107 +- 0.111  (n_seeds=4)
+    t=10  exponent=-0.094 +- 0.108  (n_seeds=4)
+  -> mean |exponent| = 0.178   worst = -0.342 (t=2)   mean se = 0.128
+     WARNING: seed band > 0.05; the doc reports +-0.01 for this quantity. Check the norm / window before reading anything into the exponent.
+
+  off = 0.881, on = 0.178
+  off fails, on is flat: the depth correction does its job.
+  wrote /iopsstor/scratch/cscs/rislamov/SwissAI-DLM-data/outputs/coordinate_checks/gidd_hf_ref_completep_B128_500steps/depth/depth_fig7.png

@@ -1,0 +1,31 @@
+
+=== cosc check, arm=off  width (L tied)=[512, 768, 1024, 1536]  norm=rmsnorm  window=steps 2..10
+    t=2   exponent=+0.518 +- 0.088  (n_seeds=4)
+    t=3   exponent=+1.117 +- 0.156  (n_seeds=4)
+    t=4   exponent=+0.795 +- 0.276  (n_seeds=4)
+    t=5   exponent=+0.934 +- 0.221  (n_seeds=4)
+    t=6   exponent=+1.023 +- 0.202  (n_seeds=4)
+    t=7   exponent=+1.070 +- 0.189  (n_seeds=4)
+    t=8   exponent=+1.093 +- 0.181  (n_seeds=4)
+    t=9   exponent=+1.098 +- 0.178  (n_seeds=4)
+    t=10  exponent=+1.084 +- 0.171  (n_seeds=4)
+  -> mean |exponent| = 0.970   worst = +1.117 (t=3)   mean se = 0.185
+     WARNING: seed band > 0.05; the doc reports +-0.01 for this quantity. Check the norm / window before reading anything into the exponent.
+
+=== cosc check, arm=on  width (L tied)=[512, 768, 1024, 1536]  norm=rmsnorm  window=steps 2..10
+    t=2   exponent=-0.483 +- 0.091  (n_seeds=4)
+    t=3   exponent=+0.063 +- 0.128  (n_seeds=4)
+    t=4   exponent=-0.106 +- 0.254  (n_seeds=4)
+    t=5   exponent=-0.074 +- 0.182  (n_seeds=4)
+    t=6   exponent=-0.086 +- 0.182  (n_seeds=4)
+    t=7   exponent=-0.014 +- 0.195  (n_seeds=4)
+    t=8   exponent=-0.006 +- 0.193  (n_seeds=4)
+    t=9   exponent=-0.009 +- 0.176  (n_seeds=4)
+    t=10  exponent=-0.012 +- 0.166  (n_seeds=4)
+  -> mean |exponent| = 0.095   worst = -0.483 (t=2)   mean se = 0.174
+     WARNING: seed band > 0.05; the doc reports +-0.01 for this quantity. Check the norm / window before reading anything into the exponent.
+
+  off = 0.970, on = 0.095
+  off fails, on is flat: the depth correction does its job.
+  (co-scale is composition evidence only; certify depth on the pure-depth axis.)
+  wrote /iopsstor/scratch/cscs/rislamov/SwissAI-DLM-data/outputs/coordinate_checks/gidd_hf_ref_completep_B128_500steps/cosc/cosc_fig7.png

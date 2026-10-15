@@ -1,0 +1,36 @@
+
+=== width check, arm=off  widths=[256, 512, 1024, 2048]  seeds/rung=[4, 4, 4, 4]
+  [act] modules=39  mean|e|=0.606  worst=+2.112
+  [prop] modules=38  mean|e|=0.631  worst=+2.112
+  [eff] modules=33  mean|e|=0.710  worst=+2.112
+  worst 12 channels:
+    layers.0.mlp.down_proj|eff                       e=+2.112 +- 0.041  (t=51.1, n=4)
+    layers.0.peri_mlp_layernorm|prop                 e=+2.112 +- 0.041  (t=51.5, n=4)
+    layers.0.mlp.down_proj|act                       e=+2.112 +- 0.041  (t=51.5, n=4)
+    layers.6.self_attn.o_proj|eff                    e=+1.999 +- 0.083  (t=24.1, n=4)
+    layers.6.self_attn.o_proj|act                    e=+1.998 +- 0.083  (t=24.1, n=4)
+    layers.6.peri_attn_layernorm|prop                e=+1.997 +- 0.083  (t=24.1, n=4)
+    layers.6.mlp.down_proj|eff                       e=+1.990 +- 0.216  (t=9.2, n=4)
+    layers.6.peri_mlp_layernorm|prop                 e=+1.989 +- 0.216  (t=9.2, n=4)
+    layers.6.mlp.down_proj|act                       e=+1.989 +- 0.216  (t=9.2, n=4)
+    layers.11.self_attn.o_proj|eff                   e=+1.916 +- 0.225  (t=8.5, n=4)
+    layers.11.self_attn.o_proj|act                   e=+1.913 +- 0.225  (t=8.5, n=4)
+    layers.11.peri_attn_layernorm|prop               e=+1.912 +- 0.225  (t=8.5, n=4)
+
+=== width check, arm=on  widths=[256, 512, 1024, 2048]  seeds/rung=[4, 4, 4, 4]
+  [act] modules=39  mean|e|=0.049  worst=-0.416
+  [prop] modules=38  mean|e|=0.055  worst=-0.416
+  [eff] modules=33  mean|e|=0.073  worst=-0.419
+  worst 12 channels:
+    layers.0.self_attn.o_proj|eff                    e=-0.419 +- 0.102  (t=4.1, n=4)
+    layers.0.peri_attn_layernorm|prop                e=-0.416 +- 0.101  (t=4.1, n=4)
+    layers.0.self_attn.o_proj|act                    e=-0.416 +- 0.101  (t=4.1, n=4)
+    layers.11.attn_layernorm|eff                     e=+0.218 +- 0.154  (unresolved, n=4)
+    layers.11.peri_attn_layernorm|eff                e=+0.168 +- 0.150  (unresolved, n=4)
+    layers.0.peri_attn_layernorm|eff                 e=+0.134 +- 0.035  (t=3.8, n=4)
+    layers.0.mlp.up_proj|eff                         e=-0.122 +- 0.018  (t=6.8, n=4)
+    layers.0.mlp.up_proj|act                         e=-0.122 +- 0.018  (t=6.7, n=4)
+    layers.0.self_attn.o_proj|prop                   e=-0.120 +- 0.064  (unresolved, n=4)
+    layers.11.peri_attn_layernorm|prop               e=-0.117 +- 0.258  (unresolved, n=4)
+    layers.11.self_attn.o_proj|act                   e=-0.117 +- 0.258  (unresolved, n=4)
+    layers.11.self_attn.o_proj|eff                   e=-0.116 +- 0.258  (unresolved, n=4)
